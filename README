@@ -1,0 +1,4 @@
+Ce petit bout de code permet de télécharger les vidéos disponibles sur le site Arte Vidéo
+il s'utilise pour le moment avec le toplevel (utop en l'occurence).
+menu();; affiche la liste des vidéos disponibles.
+dl 8;; télécharge la 8ième vidéo présentée par le menu.

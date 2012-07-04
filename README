@@ -1,4 +1,13 @@
 Ce petit bout de code permet de télécharger les vidéos disponibles sur le site Arte Vidéo
-il s'utilise pour le moment avec le toplevel (utop en l'occurence).
+Il s'utilise pour le moment avec le toplevel (utop en l'occurence) et se lace via la commande utop -init arte.ml
+
 menu();; affiche la liste des vidéos disponibles.
+Exemple :
+[0]                                                                                                                                                                                                                                         
+        ARTE Journal                                                                                                                                                                                                                        
+        L'édition de 12h50 du JT d'ARTE.                                                                                                                                                                                                    
+[1]
+	360° - GÉO
+	Le train du Darjeeling - Voyage insolite dans l'Himalaya, au pays du thé.
+
 dl 8;; télécharge la 8ième vidéo présentée par le menu.

@@ -1,6 +1,9 @@
+(*
+Pour le REPL
 #require "netclient";;
 #require "xml-light";;
-#require "extlib";;
+#require "extlib";;*)
+
 
 let execute_commande command = 
   let lines = ref "" in
@@ -139,6 +142,32 @@ let dump_par_numero num =
 	let liste_video = construit_liste_videos () in
 	let titre       = (List.nth  liste_video num).titre in
 	let url_rtmp    =  get_url_rtmp_par_numero num in
+        print_endline ("Téléchargement de "^titre); 
 	execute_commande ("rtmpdump  -e -r '"^url_rtmp^"' -o '"^titre^".flv'")
 	
 let dl num =  dump_par_numero num ;;
+
+
+let i_am_interactive () =
+  Unix.isatty Unix.stdin && Unix.isatty Unix.stdout;;
+
+let repl() =
+  try
+    menu();
+    while true do
+      if i_am_interactive ()
+      then print_string "Choisissez une vidéo, ou Quit ou ligne vide pour sortir : ";
+      let line = read_line () in
+      if line = "quit" || line = "QUIT" || line = "Quit" || line = "" then 
+              raise End_of_file
+      else 
+              dl (int_of_string line);
+              print_endline "Téléchargement terminé";
+              menu();
+       
+      (* do something with the line *)
+    done
+  with End_of_file -> ();;
+
+
+repl();;

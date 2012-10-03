@@ -1,5 +1,6 @@
 (*
 Pour le REPL
+
 #require "netclient";;
 #require "xml-light";;
 #require "extlib";;*)
@@ -8,6 +9,7 @@ Pour le REPL
 let execute_commande command = 
   let lines = ref "" in
 let chan = Unix.open_process_in command in
+        print_endline command;
      try
       while true; do
         lines := !lines^(input_line chan)^"\n"
@@ -33,7 +35,7 @@ let replace ch ~pattern:regex ~par:remplacement = Netstring_pcre.global_replace 
 let rec collect_arbre f lst arbre = 
 match arbre with 
 | Xml.Element ( a , b, lst) as el -> if f el then el::(List.flatten(List.map (collect_arbre f lst) lst)) else List.flatten(List.map (collect_arbre f lst) lst)
- | Xml.PCData a -> [];;
+| Xml.PCData a -> [];;
 
 
 let rec find_item_videos el = match el with  
@@ -56,27 +58,57 @@ type video_arte = {
 };;
 
 
+
+(*ETAPE 1 : XML DE BASE*)
 let xmlListeVideos() = 
 	let get      = Http_client.Convenience.http_get in
-	let brut =  get "http://videos.arte.tv/fr/do_delegate/videos/index-3188666,view,rss.xml" in
+	let brut =  get  "http://videos.arte.tv/fr/do_delegate/videos/index--3188698,view,asCoverflowXml.xml?hash=/tv/coverflow///1/120/" in
 	Xml.parse_string brut;;
 
 
+
+(*ETAPE 1 : XML DE BASE, ON CHERCHER LES URL HTML POUR TROUVER LE XML 2*)
 let find_element_video  el  =
 match el with
-| Xml.Element ("item", [] , b ) -> true
+| Xml.Element ("video", [] , b ) -> true
 | _ 			       -> false;;
 
-
+(*
+ *Revoir le parse avec ça :
+         <video>
+         <programType> ARTE+7 </programType>
+         <stickerUrl>
+         /image/web/i18n/view/arte7-over_2-3445012-standardTeaserData-4943539.png
+         </stickerUrl>
+         <title> Judith Milberg - Design fait maison </title>
+         <teaserText>
+         La styliste Judith Milberg transforme les vieilleries en objets décalés
+         et poétiques. Aujourd'hui: Le fauteuil surprise.
+         </teaserText>
+         <imageUrl>
+         /image/web/i18n/view/14-08-12-milberg-jpg_1-6861756-imageData-5113104.jpg
+         </imageUrl>
+         <targetUrl>
+         /fr/videos/judith-milberg-design-fait-maison--6856278.html
+         </targetUrl>
+         <startDate> Aujourd'hui, 06h46 </startDate>
+         <endDate> 2012-09-12T06:46:26 </endDate>
+         <addToPlaylistUrl>
+         /fr/do_addToPlaylist/videos/judith-milberg-design-fait-maison--6856512.html
+         </addToPlaylistUrl>
+         <duration> 26:05 </duration>
+         </video>
+ *
+ * *)
 
 let renvoi_structure_video el =
 match el with
-| Xml.Element ("item", [] , (Xml.Element ("title", [], [Xml.PCData titre]))::(Xml.Element("description", [],[Xml.PCData description]))::
-	(Xml.Element("link",[],[Xml.PCData lien]))::(Xml.Element("pubDate",[],[Xml.PCData date]))::reste  ) ->
+| Xml.Element ("video", [] , pgrmtype::stycker::(Xml.Element ("title", [], [Xml.PCData titre]))::(Xml.Element("teaserText", [],[Xml.PCData description]))::
+	imageurl::(Xml.Element("targetUrl",[],[Xml.PCData lien]))::(Xml.Element("startDate",[],[Xml.PCData date]))::reste  ) ->
    { 
-	titre 		= titre;
+        titre           = replace titre ~pattern:"&#039;" ~par:"'";
 	description 	= replace description ~pattern:"&#039;" ~par:"'";
-	urlHtml 	= lien;
+	urlHtml 	= "http://videos.arte.tv"^lien;
 	date    	= date;
  }
 | _ ->  { 
@@ -101,6 +133,7 @@ let affiche_liste_video ()  = ExtList.List.iteri (fun nbr -> (fun  elem -> let s
 let menu() = affiche_liste_video () ;;
 
 (*Fonctionne*)
+(*ON CHERCHE LE XML 2 DANS LE HTML*)
 let get_url_rtmp_from url  = 
 	let get      = Http_client.Convenience.http_get in
 	let htmlbrut = get url in
@@ -115,6 +148,7 @@ let get_url_rtmp_from url  =
 	  match el with
 	  | Xml.Element ("url", [("quality", "hd")], (Xml.PCData url)::[] ) -> true
 	  | _ -> false in
+        (**)
 	let find_url_rtmp xml2 =  
 		let balise = List.hd (collect_arbre find_element_url_rtmp_video [] xml2) in
 		match balise with
@@ -133,14 +167,16 @@ let get_url_rtmp_from url  =
 	find_url_rtmp xml2
 	
 	
+(*ETAPE 2 : ON RECUPERE LE XML 2 À PARTIR DU HML 1*)        
 let get_url_rtmp_par_numero num =
 		let liste_video = construit_liste_videos () in
+                print_endline (List.nth liste_video num).urlHtml;
 		get_url_rtmp_from (List.nth liste_video num).urlHtml
 		
 			
 let dump_par_numero num =
 	let liste_video = construit_liste_videos () in
-	let titre       = (List.nth  liste_video num).titre in
+        let titre       = replace (List.nth  liste_video num).titre ~pattern:"['/]" ~par:" " in
 	let url_rtmp    =  get_url_rtmp_par_numero num in
         print_endline ("Téléchargement de "^titre); 
 	execute_commande ("rtmpdump  -e -r '"^url_rtmp^"' -o '"^titre^".flv'")
@@ -156,7 +192,7 @@ let repl() =
     menu();
     while true do
       if i_am_interactive ()
-      then print_string "Choisissez une vidéo, ou Quit ou ligne vide pour sortir : ";
+      then print_string "Choisissez une vidéo - Quit ou ligne vide pour sortir : ";
       let line = read_line () in
       if line = "quit" || line = "QUIT" || line = "Quit" || line = "" then 
               raise End_of_file

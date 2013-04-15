@@ -1,10 +1,12 @@
-(*
-Pour le REPL
 
-#require "netclient";;
+(*Pour le REPL*)
+
+(*#require "netclient";;
 #require "xml-light";;
-#require "extlib";;*)
-
+#require "extlib";;
+*)
+type def_debug = { mutable debug : bool};;
+let isdebug = { debug = false };;
 
 let execute_commande command = 
   let lines = ref "" in
@@ -30,7 +32,7 @@ let match_expre_reguliere rex str =
 
 let replace ch ~pattern:regex ~par:remplacement = Netstring_pcre.global_replace (Netstring_pcre.regexp regex ) remplacement ch
 
-
+ 
 (*TODO faire en sorte que ça crache ce qu'on cherche, pas l'élément*)
 let rec collect_arbre f lst arbre = 
 match arbre with 
@@ -57,12 +59,12 @@ type video_arte = {
 	date 		: string;
 };;
 
-
-
+let dbg s = if isdebug.debug then print_endline s else ();;
+let get s = dbg s; execute_commande ("curl -s '"^s^"'");;
 (*ETAPE 1 : XML DE BASE*)
 let xmlListeVideos() = 
-	let get      = Http_client.Convenience.http_get in
 	let brut =  get  "http://videos.arte.tv/fr/do_delegate/videos/index--3188698,view,asCoverflowXml.xml?hash=/tv/coverflow///1/120/" in
+        let _ = "dbg get  http://videos.arte.tv/fr/do_delegate/videos/index--3188698,view,asCoverflowXml.xml?hash=/tv/coverflow///1/120/" in
 	Xml.parse_string brut;;
 
 
@@ -130,12 +132,23 @@ let affiche_liste_video ()  = ExtList.List.iteri (fun nbr -> (fun  elem -> let s
 							 ))
 						  (collect_arbre find_element_video [] (xmlListeVideos()));;
 
+
+let entoure_bouton  url = 
+"<form name=\"input\" action=\""^url^"\" method=\"get\">\n<input type=\"submit\" value=\"Lancer le téléchargement\"></form>"
+let html_liste_videos urlsend = ExtList.List.mapi (fun nbr -> (fun  elem -> let struc = print_endline (string_of_int nbr); renvoi_structure_video elem in 
+							 ("\t<b>["^(string_of_int nbr)^"]</b>\n")^
+                                                         ("\t<p>"^struc.titre^"<br/>" )^
+                                                         (struc.description^"</p><br/>\n")
+							 ))
+						  (collect_arbre find_element_video [] (xmlListeVideos()));;
+
+let html_page()   = "<html><head></head><body>"^(String.concat "<br/>" (html_liste_videos  ""))^"</body></html>";;
+
 let menu() = affiche_liste_video () ;;
 
 (*Fonctionne*)
 (*ON CHERCHE LE XML 2 DANS LE HTML*)
 let get_url_rtmp_from url  = 
-	let get      = Http_client.Convenience.http_get in
 	let htmlbrut = get url in
 	let html = replace htmlbrut ~pattern:"[\\t\\n]" ~par:"" in
 	let html2 = replace html ~pattern:".*videorefFileUrl" ~par:"videorefFileUrl" in 
@@ -167,7 +180,7 @@ let get_url_rtmp_from url  =
 	find_url_rtmp xml2
 	
 	
-(*ETAPE 2 : ON RECUPERE LE XML 2 À PARTIR DU HML 1*)        
+(*ETAPE 2 : ON RECUPERE LE XML 2 À PARTIR DU HTML 1*)        
 let get_url_rtmp_par_numero num =
 		let liste_video = construit_liste_videos () in
                 print_endline (List.nth liste_video num).urlHtml;
@@ -187,6 +200,7 @@ let dl num =  dump_par_numero num ;;
 let i_am_interactive () =
   Unix.isatty Unix.stdin && Unix.isatty Unix.stdout;;
 
+
 let repl() =
   try
     menu();
@@ -194,10 +208,10 @@ let repl() =
       if i_am_interactive ()
       then print_string "Choisissez une vidéo - Quit ou ligne vide pour sortir : ";
       let line = read_line () in
-      if line = "quit" || line = "QUIT" || line = "Quit" || line = "" then 
-              raise End_of_file
-      else 
-              dl (int_of_string line);
+      match String.lowercase line with
+      | "quit" | "" -> raise End_of_file
+      | "debug"  -> isdebug.debug = true;  menu()
+      | s -> dl (int_of_string line);
               print_endline "Téléchargement terminé";
               menu();
        
